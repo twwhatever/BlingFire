@@ -20,6 +20,14 @@ jobs:
             generators: "Visual Studio 17 2022"
           }
         - {
+            name: "Windows Latest MinGW",
+            os: windows-latest,
+            artifact: "blingfiretokdll.dll",
+            build_type = "Release",
+            cc: "gcc",
+            cxx: "g++"
+          }
+        - {
             name: "Ubuntu latest GCC",
             os: ubuntu-latest,
             artifact: "libblingfiretokdll.so",
