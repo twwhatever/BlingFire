@@ -12,7 +12,7 @@ jobs:
         - {
             name: "Windows Latest MSVC",
             os: windows-latest,
-            artifact: "blingfiretokdll.dll",
+            artifact: "Release/blingfiretokdll.dll",
             build_type: "Release",
             cc: "cl",
             ccx: "cl",
@@ -53,7 +53,7 @@ jobs:
           mkdir Release
           cd Release
           cmake -DCMAKE_BUILD_TYPE=Release ..
-          cmake --build . --target blingfiretokdll
+          cmake --build . --target blingfiretokdll --config Release
       - uses: actions/upload-artifact@v3
         with:
           name: sharedlib_${{ matrix.config.os }}
