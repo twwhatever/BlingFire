@@ -54,7 +54,7 @@ jobs:
           cmake -DCMAKE_BUILD_TYPE=Release ..
       - name: Build
         shell: bash
-        run |
+        run: |
           pwd
           cd Release
           ls
