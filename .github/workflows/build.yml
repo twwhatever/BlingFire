@@ -25,6 +25,14 @@ jobs:
             cc: "gcc",
             cxx: "g++"
           }
+        - {
+            name "MacOS latest Clang",
+            os: macos-latest,
+            artifact: "libblingfiretokdll.dylib",
+            build_type: "Release",
+            cc: "clang",
+            cxx: "clang++"
+          }
     steps:
       - uses: actions/checkout@v2
       - uses: seanmiddleditch/gha-setup-vsdevenv@master
