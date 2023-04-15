@@ -52,13 +52,13 @@ jobs:
           mkdir Release
           cd Release
           cmake -DCMAKE_BUILD_TYPE=Release ..
-      - name: Build (non Woindows)
+      - name: Build non Windows
         if: !startsWith(matrix.config.os, 'windows')
         shell: bash
         run: |
           cd Release
           make
-      - name: Build (Windows)
+      - name: Build Windows
         if: startsWith(matrix.config.os, 'windows')
         shell: bash
         run: |
