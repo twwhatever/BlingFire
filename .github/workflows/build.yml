@@ -64,7 +64,7 @@ jobs:
         shell: bash
         run: |
           cd Release
-          cmake --build build
+          cmake --build .
       - uses: actions/upload-artifact@v3
         with:
           name: sharedlib
