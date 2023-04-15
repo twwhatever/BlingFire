@@ -47,25 +47,14 @@ jobs:
           sudo apt-get install cmake
           cmake --version
           gcc --version
-      - name: Configure
+      - name: Build
         shell: bash
         run: |
           mkdir Release
           cd Release
           cmake -DCMAKE_BUILD_TYPE=Release ..
-      - name: Build non Windows
-        if: "!startsWith(matrix.config.os, 'windows')"
-        shell: bash
-        run: |
-          cd Release
-          make
-      - name: Build Windows
-        if: startsWith(matrix.config.os, 'windows')
-        shell: bash
-        run: |
-          cd Release
           cmake --build .
       - uses: actions/upload-artifact@v3
         with:
-          name: sharedlib
+          name: sharedlib_${{ matrix.config.os }}
           path: Release/${{ matrix.config.artifact }}
