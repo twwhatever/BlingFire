@@ -20,14 +20,6 @@ jobs:
             generators: "Visual Studio 17 2022"
           }
         - {
-            name: "Windows Latest MinGW",
-            os: windows-latest,
-            artifact: "blingfiretokdll.dll",
-            build_type = "Release",
-            cc: "gcc",
-            cxx: "g++"
-          }
-        - {
             name: "Ubuntu latest GCC",
             os: ubuntu-latest,
             artifact: "libblingfiretokdll.so",
@@ -61,7 +53,7 @@ jobs:
           mkdir Release
           cd Release
           cmake -DCMAKE_BUILD_TYPE=Release ..
-          cmake --build .
+          cmake --build . --target blingfiretokdll
       - uses: actions/upload-artifact@v3
         with:
           name: sharedlib_${{ matrix.config.os }}
