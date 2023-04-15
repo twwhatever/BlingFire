@@ -12,12 +12,10 @@ jobs:
         - {
             name: "Windows Latest MSVC",
             os: windows-latest,
-            artifact: "blingfiretokdll.dll",
+            artifact: "Release/blingfiretokdll.dll",
             build_type: "Release",
             cc: "cl",
             ccx: "cl",
-            environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
-            generators: "Visual Studio 17 2022"
           }
         - {
             name: "Ubuntu latest GCC",
@@ -26,6 +24,14 @@ jobs:
             build_type: "Release",
             cc: "gcc",
             cxx: "g++"
+          }
+        - {
+            name: "MacOS latest Clang",
+            os: macos-latest,
+            artifact: "libblingfiretokdll.dylib",
+            build_type: "Release",
+            cc: "clang",
+            cxx: "clang++"
           }
     steps:
       - uses: actions/checkout@v2
@@ -40,32 +46,21 @@ jobs:
         run: |
           choco install cmake
           cmake --version
-      - name: Install dependencies on Ubunto
+      - name: Install dependencies on Ubuntu
         if: startsWith(matrix.config.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install cmake
           cmake --version
           gcc --version
-      - name: Configure
+      - name: Build
         shell: bash
         run: |
           mkdir Release
           cd Release
           cmake -DCMAKE_BUILD_TYPE=Release ..
-      - name: Build non Windows
-        if: "!startsWith(matrix.config.os, 'windows')"
-        shell: bash
-        run: |
-          cd Release
-          make
-      - name: Build Windows
-        if: startsWith(matrix.config.os, 'windows')
-        shell: bash
-        run: |
-          cd Release
-          devenv.exe BLING_FIRE.sln /build
+          cmake --build . --config Release
       - uses: actions/upload-artifact@v3
         with:
-          name: sharedlib
+          name: sharedlib_${{ matrix.config.os }}
           path: Release/${{ matrix.config.artifact }}

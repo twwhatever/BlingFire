@@ -25,4 +25,4 @@ EXPORTS
     WordHyphenationWithModel
     SetNoDummyPrefix
     IdsToText
-    TexttoWordsWithTagsWithModel
+    TextToWordsWithTagsWithModel
