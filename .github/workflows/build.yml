@@ -40,7 +40,7 @@ jobs:
         run: |
           choco install cmake
           cmake --version
-      - name: Install dependencies on Ubunto
+      - name: Install dependencies on Ubuntu
         if: startsWith(matrix.config.os, 'ubuntu')
         run: |
           sudo apt-get update
