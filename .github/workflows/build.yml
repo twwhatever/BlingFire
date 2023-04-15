@@ -57,6 +57,7 @@ jobs:
         run |
           pwd
           cd Release
+          ls
           make
       - uses: actions/upload-artifact@v3
         with:
