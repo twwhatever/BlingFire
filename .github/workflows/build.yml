@@ -16,16 +16,16 @@ jobs:
             build_type: "Release",
             cc: "cl",
             ccx: "cl",
-            environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat"
+            environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
             generators: "Visual Studio 17 2022"
-          },
+          }
         - {
             name: "Ubuntu latest GCC",
             os: ubuntu-latest,
             artifact: "libblingfiretokdll.so",
             build_type: "Release",
             cc: "gcc",
-            cxx: "g++",
+            cxx: "g++"
           }
     steps:
       - uses: actions/checkout@v2
