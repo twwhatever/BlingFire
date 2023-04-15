@@ -5,7 +5,7 @@
 #include <mutex>
 #include <assert.h>
 
-namespace BlingFire 
+namespace BlingFire
 {
 // SENTENCE PIECE DELIMITER
 #define __FASpDelimiter__ 0x2581
@@ -31,13 +31,14 @@ const int TextToSentencesWithOffsets(const char * pInUtf8Str, int InUtf8StrByteC
 const int TextToSentencesWithModel(const char * pInUtf8Str, int InUtf8StrByteCount, char * pOutUtf8Str, const int MaxOutUtf8StrByteCount, void * hModel);
 const int TextToSentences(const char * pInUtf8Str, int InUtf8StrByteCount, char * pOutUtf8Str, const int MaxOutUtf8StrByteCount);
 const int TextToWordsWithOffsetsWithModel(const char * pInUtf8Str, int InUtf8StrByteCount,
-    char * pOutUtf8Str, int * pStartOffsets, int * pEndOffsets, const int MaxOutUtf8StrByteCount,
+    char * pOutUtf8Str, int * pStartOffsets, int * pEndOffsets, int * pTags, const int MaxOutUtf8StrByteCount,
     void * hModel);
 const int TextToWordsWithOffsets(const char * pInUtf8Str, int InUtf8StrByteCount,
     char * pOutUtf8Str, int * pStartOffsets, int * pEndOffsets, const int MaxOutUtf8StrByteCount);
 const int TextToWordsWithModel(const char * pInUtf8Str, int InUtf8StrByteCount,
     char * pOutUtf8Str, const int MaxOutUtf8StrByteCount, void * hModel);
 const int TextToWords(const char * pInUtf8Str, int InUtf8StrByteCount, char * pOutUtf8Str, const int MaxOutUtf8StrByteCount);
+const int TextToWordsWithTagsWithModel(const char * pInUtf8Str, int InUtf8StrByteCount, char * pOutUtf8Str, int* pTags, const int MaxOutUtf8StrByteCount, void * hModel);
 const int NormalizeSpaces(const char * pInUtf8Str, int InUtf8StrByteCount, char * pOutUtf8Str, const int MaxOutUtf8StrByteCount, const int uSpace = __FASpDelimiter__);
 const int TextToHashes(const char * pInUtf8Str, int InUtf8StrByteCount, int32_t * pHashArr, const int MaxHashArrLength, int wordNgrams, int bucketSize = 2000000);
 const int WordHyphenationWithModel(const char * pInUtf8Str, int InUtf8StrByteCount,
@@ -48,8 +49,8 @@ const int TextToIdsWithOffsets_wp(
         void* ModelPtr,
         const char * pInUtf8Str,
         int InUtf8StrByteCount,
-        int32_t * pIdsArr, 
-        int * pStartOffsets, 
+        int32_t * pIdsArr,
+        int * pStartOffsets,
         int * pEndOffsets,
         const int MaxIdsArrLength,
         const int UnkId = 0
@@ -67,7 +68,7 @@ const int TextToIdsWithOffsets_sp(
         const char * pInUtf8Str,
         int InUtf8StrByteCount,
         int32_t * pIdsArr,
-        int * pStartOffsets, 
+        int * pStartOffsets,
         int * pEndOffsets,
         const int MaxIdsArrLength,
         const int UnkId = 0
@@ -85,7 +86,7 @@ const int TextToIdsWithOffsets(
         const char * pInUtf8Str,
         int InUtf8StrByteCount,
         int32_t * pIdsArr,
-        int * pStartOffsets, 
+        int * pStartOffsets,
         int * pEndOffsets,
         const int MaxIdsArrLength,
         const int UnkId = 0

@@ -1,7 +1,7 @@
 
 LIBRARY     blingfiretokdll.dll
 
-EXPORTS 
+EXPORTS
     TextToSentences
     TextToWords
     TextToSentencesWithOffsets
@@ -25,3 +25,4 @@ EXPORTS
     WordHyphenationWithModel
     SetNoDummyPrefix
     IdsToText
+    TexttoWordsWithTagsWithModel
