@@ -96,7 +96,7 @@ struct FAModelData
 };
 
 #ifndef SIZE_OPTIMIZATION
-// keep two built-in models one for default WBD and one for default SBD 
+// keep two built-in models one for default WBD and one for default SBD
 FAModelData g_DefaultWbd;
 FAModelData g_DefaultSbd;
 #endif
@@ -152,7 +152,7 @@ inline int FAGetFirstNonWhiteSpace(int * pStr, const int StrLen)
 
 //
 // The same as TextToSentences, but it allows to use a custom model and returns offsets
-// 
+//
 // pStartOffsets is an array of integers (first character of each sentence) with upto MaxOutUtf8StrByteCount elements
 // pEndOffsets is an array of integers (last character of each sentence) with upto MaxOutUtf8StrByteCount elements
 //
@@ -371,7 +371,7 @@ const int TextToSentencesWithOffsets(const char * pInUtf8Str, int InUtf8StrByteC
 
 //
 // The same as TextToSentences, but allows to load a custom model
-// 
+//
 // The hModel parameter allows to use a custom model loaded with LoadModel API, if NULL then
 //  the built in is used.
 //
@@ -388,7 +388,7 @@ const int TextToSentencesWithModel(const char * pInUtf8Str, int InUtf8StrByteCou
 // Input:  UTF-8 string of one paragraph or document
 // Output: Size in bytes of the output string and UTF-8 string of '\n' delimited sentences, if the return size <= MaxOutUtf8StrByteCount
 //
-//  Notes:  
+//  Notes:
 //
 //  1. The return value is -1 in case of an error (make sure your input is a valid UTF-8, BOM is not required)
 //  2. We do not use "\r\n" to delimit sentences, it is always '\n'
@@ -403,7 +403,7 @@ const int TextToSentences(const char * pInUtf8Str, int InUtf8StrByteCount, char 
 
 
 //
-// Same as TextToWords, but also returns original offsets from the input buffer for each word and allows to use a 
+// Same as TextToWords, but also returns original offsets from the input buffer for each word and allows to use a
 //  custom model
 //
 // pStartOffsets is an array of integers (first character of each word) with upto MaxOutUtf8StrByteCount elements
@@ -414,7 +414,7 @@ const int TextToSentences(const char * pInUtf8Str, int InUtf8StrByteCount, char 
 //
 extern "C"
 const int TextToWordsWithOffsetsWithModel(const char * pInUtf8Str, int InUtf8StrByteCount,
-    char * pOutUtf8Str, int * pStartOffsets, int * pEndOffsets, const int MaxOutUtf8StrByteCount,
+    char * pOutUtf8Str, int * pStartOffsets, int * pEndOffsets, int * pTags, const int MaxOutUtf8StrByteCount,
     void * hModel)
 {
 #ifdef SIZE_OPTIMIZATION
@@ -440,7 +440,7 @@ const int TextToWordsWithOffsetsWithModel(const char * pInUtf8Str, int InUtf8Str
 #endif
 
     // pModel is always initialized here
-    const FAModelData * pModel = (const FAModelData *) hModel; 
+    const FAModelData * pModel = (const FAModelData *) hModel;
 
     // validate the parameters
     if (0 == InUtf8StrByteCount) {
@@ -471,6 +471,9 @@ const int TextToWordsWithOffsetsWithModel(const char * pInUtf8Str, int InUtf8Str
     }
     if (pEndOffsets) {
         memset(pEndOffsets, 0, MaxOutUtf8StrByteCount * sizeof(int));
+    }
+    if (pTags) {
+        memset(pTags, 0, MaxOutUtf8StrByteCount * sizeof(int));
     }
 
     // convert input to UTF-32
@@ -530,6 +533,9 @@ const int TextToWordsWithOffsetsWithModel(const char * pInUtf8Str, int InUtf8Str
             const int ToCharSize = ::FAUtf8Size(pInUtf8Str + pOffsets[To]);
             pEndOffsets[WordCount] = pOffsets[To] + (0 < ToCharSize ? ToCharSize - 1 : 0);
         }
+        if (pTags && WordCount < MaxOutUtf8StrByteCount) {
+            pTags[WordCount] = Tag;
+        }
         WordCount++;
 
         // check the output size
@@ -577,13 +583,13 @@ const int TextToWordsWithOffsets(const char * pInUtf8Str, int InUtf8StrByteCount
     char * pOutUtf8Str, int * pStartOffsets, int * pEndOffsets, const int MaxOutUtf8StrByteCount)
 {
     return TextToWordsWithOffsetsWithModel(pInUtf8Str,InUtf8StrByteCount,
-        pOutUtf8Str, pStartOffsets, pEndOffsets, MaxOutUtf8StrByteCount, NULL);
+        pOutUtf8Str, pStartOffsets, pEndOffsets, NULL, MaxOutUtf8StrByteCount, NULL);
 }
 
 
 //
 // Same as TextToWords, but allows to load a custom model
-// 
+//
 // The hModel parameter allows to use a custom model loaded with LoadModel API, if NULL then
 //  the built in is used.
 //
@@ -592,7 +598,7 @@ const int TextToWordsWithModel(const char * pInUtf8Str, int InUtf8StrByteCount,
     char * pOutUtf8Str, const int MaxOutUtf8StrByteCount, void * hModel)
 {
     return TextToWordsWithOffsetsWithModel(pInUtf8Str,InUtf8StrByteCount,
-        pOutUtf8Str, NULL, NULL, MaxOutUtf8StrByteCount, hModel);
+        pOutUtf8Str, NULL, NULL, NULL, MaxOutUtf8StrByteCount, hModel);
 }
 
 
@@ -610,9 +616,13 @@ const int TextToWordsWithModel(const char * pInUtf8Str, int InUtf8StrByteCount,
 extern "C"
 const int TextToWords(const char * pInUtf8Str, int InUtf8StrByteCount, char * pOutUtf8Str, const int MaxOutUtf8StrByteCount)
 {
-    return TextToWordsWithOffsetsWithModel(pInUtf8Str, InUtf8StrByteCount, pOutUtf8Str, NULL, NULL, MaxOutUtf8StrByteCount, NULL);
+    return TextToWordsWithOffsetsWithModel(pInUtf8Str, InUtf8StrByteCount, pOutUtf8Str, NULL, NULL, NULL, MaxOutUtf8StrByteCount, NULL);
 }
 
+extern "C"
+const int TextToWordsWithTagsWithModel(const char * pInUtf8Str, int InUtf8StrByteCount, char * pOutUtf8Str, int* pTags, const int MaxOutUtf8StrByteCount, void * hModel) {
+    return TextToWordsWithOffsetsWithModel(pInUtf8Str, InUtf8StrByteCount, pOutUtf8Str, NULL, NULL, pTags, MaxOutUtf8StrByteCount, hModel);
+}
 
 //
 // This function is like TextToWords, but it only normalizes consequtive spaces, it is not as flexble
@@ -625,7 +635,7 @@ const int TextToWords(const char * pInUtf8Str, int InUtf8StrByteCount, char * pO
 //
 // Notes:
 //  The return value is -1 in case of an error (make sure your input is a valid UTF-8, BOM is not required)
-//  
+//
 extern "C"
 const int NormalizeSpaces(const char * pInUtf8Str, int InUtf8StrByteCount, char * pOutUtf8Str, const int MaxOutUtf8StrByteCount, const int uSpace = __FASpDelimiter__)
 {
@@ -747,7 +757,7 @@ const int ComputeHashes(const char * input, const int strLen, int32_t * hashArr,
     const char * pWordStart = pTemp;
     size_t wordLength = 0;
 
-    // add unigram hash first while reading the tokens. Unlike fasttext, there's no EOS padding here. 
+    // add unigram hash first while reading the tokens. Unlike fasttext, there's no EOS padding here.
     for (int pos = 0; pos <= strLen; pos++)
     {
         // check for end of line first otherwise check the character so we don't read past the buffer end
@@ -766,7 +776,7 @@ const int ComputeHashes(const char * input, const int strLen, int32_t * hashArr,
         }
     }
 
-    //Add higher order ngrams (bigrams and up), each token has a ngram starting from itself makes the size ngram * ntokens. 
+    //Add higher order ngrams (bigrams and up), each token has a ngram starting from itself makes the size ngram * ntokens.
     AddWordNgrams(hashArr, hashCount, wordNgrams, bucketSize);
 
     return hashCount;
@@ -778,7 +788,7 @@ const int MAX_ALLOCA_SIZE = 204800;
 
 
 //
-// This function implements the fasttext-like hashing logics. It assumes the input text is already tokenized and 
+// This function implements the fasttext-like hashing logics. It assumes the input text is already tokenized and
 //  tokens are merged by a single space.
 //
 // Example: input :  "This is ok ."
@@ -817,8 +827,8 @@ const int TextToHashes(const char * pInUtf8Str, int InUtf8StrByteCount, int32_t 
 
 //
 // WordHyphenationWithModel - returns a hyphenated string for an input word.
-// 
-// The hModel parameter allows to use a model loaded with LoadModel API, 
+//
+// The hModel parameter allows to use a model loaded with LoadModel API,
 //  NULL is not allowed since there is no built in model for this function
 //
 extern "C"
@@ -826,7 +836,7 @@ const int WordHyphenationWithModel(const char * pInUtf8Str, int InUtf8StrByteCou
     char * pOutUtf8Str, const int MaxOutUtf8StrByteCount, void * hModel, const int uHy = __FADefaultHyphen__)
 {
     // pModel is always initialized here
-    const FAModelData * pModel = (const FAModelData *) hModel; 
+    const FAModelData * pModel = (const FAModelData *) hModel;
 
     // validate the parameters
     if (0 == InUtf8StrByteCount) {
@@ -972,7 +982,7 @@ void* SetModelData(FAModelData * pNewModelData, const unsigned char * pImgBytes)
             pNewModelData->m_SegEngine.SetConf(&pNewModelData->m_DictConf);
             pNewModelData->m_pAlgo = &(pNewModelData->m_SegEngine);
         }
-        
+
         // see if we need to treat UTF-8 bytes as input
         pNewModelData->m_useRawBytes = pNewModelData->m_DictConf.GetUseByteEncoding();
     }
@@ -1110,8 +1120,8 @@ const int TextToIdsWithOffsets_wp(
         void* ModelPtr,
         const char * pInUtf8Str,
         int InUtf8StrByteCount,
-        int32_t * pIdsArr, 
-        int * pStartOffsets, 
+        int32_t * pIdsArr,
+        int * pStartOffsets,
         int * pEndOffsets,
         const int MaxIdsArrLength,
         const int UnkId = 0
@@ -1145,7 +1155,7 @@ const int TextToIdsWithOffsets_wp(
     }
 
     // convert input to UTF-32, track offsets if needed
-    int BuffSize = fNeedOffsets ? 
+    int BuffSize = fNeedOffsets ?
         ::FAStrUtf8ToArray(pInUtf8Str, InUtf8StrByteCount, pBuff, pOffsets, InUtf8StrByteCount) :
         ::FAStrUtf8ToArray(pInUtf8Str, InUtf8StrByteCount, pBuff, InUtf8StrByteCount);
     if (BuffSize <= 0 || BuffSize > InUtf8StrByteCount) {
@@ -1179,7 +1189,7 @@ const int TextToIdsWithOffsets_wp(
             }
         }
 
-        BuffSize = fNeedOffsets ? 
+        BuffSize = fNeedOffsets ?
             ::FANormalize(pBuff, BuffSize, pNormBuff, pNormOffsets, InUtf8StrByteCount, pCharMap) :
             ::FANormalize(pBuff, BuffSize, pNormBuff, InUtf8StrByteCount, pCharMap);
         if (BuffSize <= 0 || BuffSize > InUtf8StrByteCount) {
@@ -1334,11 +1344,11 @@ const int TextToIds_wp(
 //
 // Implements a sentence piece algorithm, returns predictions from FATokenSegmentationTools_1best_t.
 // The input is always prepended with ' ' / '▁' since this seems the case in the sentence piece.
-// Returns upto MaxIdsArrLength ids, the rest of the array is unchanged, so the array can be set to 
+// Returns upto MaxIdsArrLength ids, the rest of the array is unchanged, so the array can be set to
 // initial length and fill with 0's for padding. Returns number of ids copied into the array.
 //
 // Example:
-// printf "Sergei Alonichau I saw a girl with a \ttelescope." | spm_encode --model=xlnet/spiece.model 
+// printf "Sergei Alonichau I saw a girl with a \ttelescope." | spm_encode --model=xlnet/spiece.model
 // ▁Sergei ▁Al oni chau ▁I ▁saw ▁a ▁girl ▁with ▁a ▁telescope .
 //
 // printf "Sergei Alonichau I saw a girl with a \ttelescope." | spm_encode --model=xlnet/spiece.model --output_format=id
@@ -1352,7 +1362,7 @@ const int TextToIdsWithOffsets_sp(
         const char * pInUtf8Str,
         int InUtf8StrByteCount,
         int32_t * pIdsArr,
-        int * pStartOffsets, 
+        int * pStartOffsets,
         int * pEndOffsets,
         const int MaxIdsArrLength,
         const int UnkId = 0
@@ -1398,11 +1408,11 @@ const int TextToIdsWithOffsets_sp(
     // convert input to UTF-32 or bytes (write output past the added first space)
     int BuffSize;
     if(false == pModelData->m_useRawBytes) {
-        BuffSize = fNeedOffsets ? 
+        BuffSize = fNeedOffsets ?
             ::FAStrUtf8ToArray(pInUtf8Str, InUtf8StrByteCount, pBuff + BUFF_DATA_OFFSET, pOffsets + BUFF_DATA_OFFSET, InUtf8StrByteCount) :
             ::FAStrUtf8ToArray(pInUtf8Str, InUtf8StrByteCount, pBuff + BUFF_DATA_OFFSET, InUtf8StrByteCount);
     } else {
-        BuffSize = fNeedOffsets ? 
+        BuffSize = fNeedOffsets ?
             ::FAStrUtf8AsBytesToArray(pInUtf8Str, InUtf8StrByteCount, pBuff + BUFF_DATA_OFFSET, pOffsets + BUFF_DATA_OFFSET, InUtf8StrByteCount) :
             ::FAStrUtf8AsBytesToArray(pInUtf8Str, InUtf8StrByteCount, pBuff + BUFF_DATA_OFFSET, InUtf8StrByteCount);
     }
@@ -1435,7 +1445,7 @@ const int TextToIdsWithOffsets_sp(
         }
 
         // do the normalization for the entire input
-        const int ActualNormBuffSize = fNeedOffsets ? 
+        const int ActualNormBuffSize = fNeedOffsets ?
             ::FANormalize(pBuff, BuffSize, pNormBuff, pNormOffsets, MaxNormBuffSize, pCharMap) :
             ::FANormalize(pBuff, BuffSize, pNormBuff, MaxNormBuffSize, pCharMap);
 
@@ -1451,10 +1461,10 @@ const int TextToIdsWithOffsets_sp(
 
     // Replace every space sequence with U+2581 in-place
     //
-    // Note: This operation affect offsets. Since the output sequence is always the 
+    // Note: This operation affect offsets. Since the output sequence is always the
     //       same length or shorter we can update the offsets in-place.
     //       If normalization is enbled the offsets are computed as a superposition of
-    //       normalization and utf-32 offsets, then transformation should be applied to 
+    //       normalization and utf-32 offsets, then transformation should be applied to
     //       normalization offsets, otherwise to utf-32 offsets.
     //
     int * pAdjustedOffsets = fNeedOffsets ? (NULL != pCharMap ? pNormOffsets : pOffsets) : NULL;
@@ -1553,8 +1563,8 @@ const int TextToIds_sp(
 
 
 //
-// Implements a word-piece or sentence piece algorithms which is defined by the loaded model. 
-// Returns ids of words or sub-words, returns upto MaxIdsArrLength ids, the rest of the array 
+// Implements a word-piece or sentence piece algorithms which is defined by the loaded model.
+// Returns ids of words or sub-words, returns upto MaxIdsArrLength ids, the rest of the array
 // is unchanged, so the array can be set to initial length and fill with 0's for padding.
 // Returns number of ids copied into the array.
 //
@@ -1565,7 +1575,7 @@ const int TextToIdsWithOffsets(
         const char * pInUtf8Str,
         int InUtf8StrByteCount,
         int32_t * pIdsArr,
-        int * pStartOffsets, 
+        int * pStartOffsets,
         int * pEndOffsets,
         const int MaxIdsArrLength,
         const int UnkId = 0
@@ -1582,13 +1592,13 @@ const int TextToIdsWithOffsets(
     {
         // call word-piece algorithm
         return TextToIdsWithOffsets_wp(
-                ModelPtr, 
-                pInUtf8Str, 
-                InUtf8StrByteCount, 
-                pIdsArr, 
-                pStartOffsets, 
-                pEndOffsets, 
-                MaxIdsArrLength, 
+                ModelPtr,
+                pInUtf8Str,
+                InUtf8StrByteCount,
+                pIdsArr,
+                pStartOffsets,
+                pEndOffsets,
+                MaxIdsArrLength,
                 UnkId
             );
     }
@@ -1596,13 +1606,13 @@ const int TextToIdsWithOffsets(
     {
         // call sentence-piece algorithm
         return TextToIdsWithOffsets_sp(
-                ModelPtr, 
-                pInUtf8Str, 
-                InUtf8StrByteCount, 
-                pIdsArr, 
-                pStartOffsets, 
-                pEndOffsets, 
-                MaxIdsArrLength, 
+                ModelPtr,
+                pInUtf8Str,
+                InUtf8StrByteCount,
+                pIdsArr,
+                pStartOffsets,
+                pEndOffsets,
+                MaxIdsArrLength,
                 UnkId
             );
     }
@@ -1610,8 +1620,8 @@ const int TextToIdsWithOffsets(
 
 
 //
-// Implements a word-piece or sentence piece algorithms which is defined by the loaded model. 
-// Returns ids of words or sub-words, returns upto MaxIdsArrLength ids, the rest of the array 
+// Implements a word-piece or sentence piece algorithms which is defined by the loaded model.
+// Returns ids of words or sub-words, returns upto MaxIdsArrLength ids, the rest of the array
 // is unchanged, so the array can be set to initial length and fill with 0's for padding.
 // Returns number of ids copied into the array.
 //
@@ -1682,10 +1692,10 @@ int SetNoDummyPrefix(void* ModelPtr, bool fNoDummyPrefix)
 //
 // Returns text string given a sequence of Ids
 //  Note: the model file should contain [i2w] configuration or separate *.i2w model file should be used
-// 
+//
 // return value is the actual string length
 // if the actual string length is more than MaxOutUtf8StrByteCount then pOutUtf8Str content is undefined
-// 
+//
 extern "C"
 int IdsToText (void* ModelPtr, const int32_t * pIdsArr, const int IdsCount, char * pOutUtf8Str, const int MaxOutUtf8StrByteCount, bool SkipSpecialTokens)
 {
