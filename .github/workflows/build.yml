@@ -64,7 +64,7 @@ jobs:
         shell: bash
         run: |
           cd Release
-          devenv.exe BLING_FIRE.sln /build Release
+          cmake --build build
       - uses: actions/upload-artifact@v3
         with:
           name: sharedlib
