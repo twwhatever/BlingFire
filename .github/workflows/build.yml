@@ -52,14 +52,19 @@ jobs:
           mkdir Release
           cd Release
           cmake -DCMAKE_BUILD_TYPE=Release ..
-      - name: Build
+      - name: Build (non Woindows)
+        if: !startsWith(matrix.config.os, 'windows')
         shell: bash
         run: |
-          pwd
           cd Release
-          ls
           make
+      - name: Build (Windows)
+        if: startsWith(matrix.config.os, 'windows')
+        shell: bash
+        run: |
+          cd Release
+          devenv.exe BLING_FIRE.sln /build
       - uses: actions/upload-artifact@v3
         with:
           name: sharedlib
-          path: ${{ matrix.config.artifact }}
+          path: Release/${{ matrix.config.artifact }}
