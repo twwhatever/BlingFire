@@ -46,10 +46,19 @@ jobs:
           sudo apt-get install cmake
           cmake --version
           gcc --version
-      - name: Build
+      - name: Configure
         shell: bash
         run: |
           mkdir Release
           cd Release
           cmake -DCMAKE_BUILD_TYPE=Release ..
+      - name: Build
+        shell: bash
+        run |
+          pwd
+          cd Release
           make
+      - uses: actions/upload-artifact@v3
+        with:
+          name: sharedlib
+          path: ${{ matrix.config.artifact }}
