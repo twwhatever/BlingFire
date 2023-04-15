@@ -26,7 +26,7 @@ jobs:
             cxx: "g++"
           }
         - {
-            name "MacOS latest Clang",
+            name: "MacOS latest Clang",
             os: macos-latest,
             artifact: "libblingfiretokdll.dylib",
             build_type: "Release",
