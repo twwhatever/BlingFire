@@ -102,5 +102,18 @@ const int TextToIds(
 int FreeModel(void* ModelPtr);
 int SetNoDummyPrefix(void* ModelPtr, bool fNoDummyPrefix);
 int IdsToText (void* ModelPtr, const int32_t * pIdsArr, const int IdsCount, char * pOutUtf8Str, const int MaxOutUtf8StrByteCount, bool SkipSpecialTokens);
+int ParseWre(
+    const char * pInUtf8Str,
+    int InUtf8StrByteCount,
+    const int * pInStartOffsets,
+    const int* pInEndOffsets,
+    const int* pInTags, 
+    int InTokenCount,
+    int * pOutFroms,
+    int * pOutTos,
+    int * pOutTags,
+    int MaxOutWordCount,
+    void * hModel
+);
 }
 }

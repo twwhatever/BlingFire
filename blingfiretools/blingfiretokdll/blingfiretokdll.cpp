@@ -12,6 +12,15 @@
 #include "FAHyphConfKeeper_packaged.h"
 #include "FAHyphInterpreter_core_t.h"
 #include "FAStringArray_pack.h"
+#include "FAWREConf_pack.h"
+#include "FADigitizer_t.h"
+#include "FADigitizer_dct_t.h"
+#include "FAAutInterpretTools_t.h"
+#include "FAAutInterpretTools_fnfa_t.h"
+#include "FAAutInterpretTools2_trbr_t.h"
+#include "FAAllocator.h"
+#include "FAFsmConst.h"
+#include "FABrResult.h"
 
 #include "blingfiretokdll.h"
 
@@ -82,6 +91,7 @@ struct FAModelData
     int m_min_token_id; // min regular token id, needed to separate special tokens
     int m_max_token_id; // max regular token id, needed to separate special tokens
 
+    // TODO(twwhatever): probably need extra LDB for dictionary support in WRE
 
     FAModelData ():
         m_hasWbd (false),
@@ -1752,4 +1762,212 @@ int IdsToText (void* ModelPtr, const int32_t * pIdsArr, const int IdsCount, char
 
     // return the actual length of the output (the minimum length needed to keep entire output)
     return ActualLength;
+}
+
+extern "C"
+int ParseWre(
+    const char * pInUtf8Str,
+    int InUtf8StrByteCount,
+    const int * pInStartOffsets,
+    const int * pInEndOffsets,
+    const int * pInTags, 
+    int InTokenCount,
+    int * pOutFroms,
+    int * pOutTos,
+    int * pOutTags,
+    int MaxOutWordCount,
+    void * hModel
+)
+{
+    if (NULL == hModel) {
+        return -1;
+    }
+    // TODO(twwhatever): I don't think it's possible to implicitly load the model here,
+    // since it seems like that's hard-coded for word breaking models.
+
+    FAModelData* pFAModel = reinterpret_cast<FAModelData*>(hModel);
+    if (NULL == pFAModel) {
+        return -1;
+    }
+
+    // Configure WRE parser
+    FAWREConf_pack packed_wre;
+    packed_wre.SetImage(pFAModel->m_Img.GetImageDump());
+    FAWREConfCA * pWre = &packed_wre;
+
+    // TODO(twwhatever): load PRM LDB?  Maybe needed for dictionary support.
+    // TODO(twwhatever): load tagset? Maybe only needed for debugging.
+
+    // run-time initialization
+    FAAllocator alloc;
+    FADigitizer_t<char> txt_digitizer;
+    FADigitizer_dct_t<char> dct_digitizer;
+    FAAutInterpretTools_fnfa_t<int> proc_fnfa(&alloc);
+    FAAutInterpretTools2_trbr_t<int> proc_trbr(&alloc);
+    FABrResult trbr_res(&alloc);
+    
+    const int Type = pWre->GetType();
+    const int TokenType = pWre->GetTokenType();
+    const int TagOwBase = pWre->GetTagOwBase();
+    int TupleSize = 0;
+
+    // Initialize digitizers
+    if (FAFsmConst::WRE_TT_TEXT & TokenType) {
+        const FARSDfaCA * pDfa = pWre->GetTxtDigDfa();
+        const FAState2OwCA * pOws = pWre->GetTxtDigOws();
+
+        if (!pDfa || !pOws) {
+            return -2;
+        }
+        txt_digitizer.SetAnyIw(FAFsmConst::IW_ANY);
+        txt_digitizer.SetAnyOw(FAFsmConst::IW_ANY);
+        txt_digitizer.SetIgnoreCase(false);  // TODO(twwhatever)
+        txt_digitizer.SetRsDfa(pDfa);
+        txt_digitizer.SetState2Ow(pOws);
+        txt_digitizer.Prepare();
+        TupleSize++;
+    }
+    if (FAFsmConst::WRE_TT_DCTS & TokenType) {
+        // TODO(twwhatever): This means we need PRM ldb support!
+        return -3;
+    }
+    if (FAFsmConst::WRE_TT_TAGS & TokenType) {
+        TupleSize++;
+    }
+
+    // Initialize interpreters
+    switch (Type)
+    {
+    case FAFsmConst::WRE_TYPE_RS:
+    {
+        const FARSDfaCA *pDfa1 = pWre->GetDfa1();
+        proc_fnfa.SetTupleSize(TupleSize);
+        proc_fnfa.SetAnyIw(FAFsmConst::IW_ANY);
+        proc_fnfa.SetRsDfa(pDfa1);
+    }
+    break;
+    case FAFsmConst::WRE_TYPE_MOORE:
+    {
+        const FARSDfaCA * pDfa1 = pWre->GetDfa1();
+        const FAState2OwsCA * pState2Ows = pWre->GetState2Ows();
+        proc_fnfa.SetTupleSize(TupleSize);
+        proc_fnfa.SetAnyIw(FAFsmConst::IW_ANY);
+        proc_fnfa.SetRsDfa(pDfa1);
+        proc_fnfa.SetState2Ows(pState2Ows);
+    }
+    break;
+    case FAFsmConst::WRE_TYPE_MEALY:
+    {
+        const FARSDfaCA *pDfa1 = pWre->GetDfa1();
+        const FAMealyDfaCA *pSigma1 = pWre->GetSigma1();
+        const FARSDfaCA *pDfa2 = pWre->GetDfa2();
+        const FAMealyDfaCA *pSigma2 = pWre->GetSigma2();
+        const FAMultiMapCA *pTrBr = pWre->GetTrBrMap();
+        proc_trbr.SetTupleSize(TupleSize);
+        proc_trbr.SetTokenType(TokenType);
+        proc_trbr.SetMealy1(pDfa1, pSigma1);
+        proc_trbr.SetMealy2(pDfa2, pSigma2);
+        proc_trbr.SetTrBrMap(pTrBr);
+        trbr_res.SetBase(-1);
+    }
+    break;
+    default:
+        return -4;
+    }
+
+    const int MaxChainSize = FALimits::MaxWordCount * FAFsmConst::DIGITIZER_COUNT;
+    int OwsChain[MaxChainSize];
+    int ResSizes[MaxChainSize];
+    const int * ResPtrs[MaxChainSize];
+
+    for (int k = 0; k < TupleSize; ++k) {
+        OwsChain[k] = FAFsmConst::IW_L_ANCHOR;
+    }
+
+    int ChainSize = TupleSize;
+
+    // Process input
+    for (int i = 0; i < InTokenCount; ++i) {
+        // TODO(twwhatever): will this work without UTF-32 conversion?
+        const char* pWord = &pInUtf8Str[pInStartOffsets[i]];
+        const int WordLen = pInEndOffsets[i] - pInStartOffsets[i] + 1;  // TODO(twwhatever): from, to or start, end?
+        const int Tag = pInTags[i];
+
+        if (FAFsmConst::WRE_TT_TEXT & TokenType) {
+            const int Ow = txt_digitizer.Process(pWord, WordLen);
+            OwsChain[ChainSize++] = Ow;
+        }
+        if (FAFsmConst::WRE_TT_TAGS & TokenType) {
+            const int Ow = Tag * TagOwBase;
+            OwsChain[ChainSize++] = Ow;
+        }
+        if (FAFsmConst::WRE_TT_DCTS & TokenType) {
+            const int Ow = dct_digitizer.Process(pWord, WordLen);
+            OwsChain[ChainSize++] = Ow;
+        }
+    }
+    for (int j = 0; j < TupleSize; ++j) {
+        OwsChain[ChainSize++] = FAFsmConst::IW_R_ANCHOR;
+    }
+
+    // interpretation: Ows --> Results
+    int OutputCount = 0;
+
+    switch(Type) {
+        case FAFsmConst::WRE_TYPE_RS:
+        
+            proc_fnfa.Chain2Bool(OwsChain, ChainSize);
+
+        break;
+        case FAFsmConst::WRE_TYPE_MOORE:
+        {
+            proc_fnfa.Chain2OwSetChain(OwsChain, ResPtrs, ResSizes, ChainSize);
+
+            bool faound = false;
+
+            for (int i = 0; i < InTokenCount + 2; ++i) {
+                if (0 < ResSizes[i]) {
+
+                }
+            }
+        }
+        break;
+        case FAFsmConst::WRE_TYPE_MEALY:
+        {
+            const bool Res = proc_trbr.Process(OwsChain, ChainSize, &trbr_res);
+
+            if (!Res) {
+                break;
+            }
+            const int * pFromTo;
+            int BrId = -1;
+            int Count = trbr_res.GetNextRes(&BrId, &pFromTo);
+
+            while (-1 != Count) {
+                for (int i = 0; i < Count; ++i) {
+                    if (OutputCount >= MaxOutWordCount) {
+                        ++OutputCount;
+                        continue;
+                    }
+                    pOutFroms[OutputCount] = pFromTo[i++];
+                    pOutTos[OutputCount] = pFromTo[i];
+                    pOutTags[OutputCount] = BrId;
+                    ++OutputCount;
+                }
+                Count = trbr_res.GetNextRes(&Brid, &pFromTo);
+            }
+        }
+        break;
+        default:
+        return -4;
+    }
+
+    // TODO(twwhatever): double check this protocol!
+    //
+    //   1. Should we return OutputCount no matter what & let caller deal w/ check?
+    //   2. OutputCount > MaxOutWordCount or OutputCount >= MaxOutWordCount?
+    if (OutputCount >= MaxOutWordCount) {
+        return OutputCount;
+    }
+    return 0;
 }
