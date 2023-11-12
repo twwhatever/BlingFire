@@ -16,11 +16,10 @@
 #include "FADigitizer_t.h"
 #include "FADigitizer_dct_t.h"
 #include "FAAutInterpretTools_t.h"
-#include "FAAutInterpretTools_fnfa_t.h"
 #include "FAAutInterpretTools2_trbr_t.h"
 #include "FAAllocator.h"
 #include "FAFsmConst.h"
-#include "FABrResult.h"
+#include "FABrResultA.h"
 
 #include "blingfiretokdll.h"
 
@@ -1764,6 +1763,18 @@ int IdsToText (void* ModelPtr, const int32_t * pIdsArr, const int IdsCount, char
     return ActualLength;
 }
 
+// This class is used to hold bracket results from WRE.
+class BracketOutput : public FABrResultA {
+    public:
+    void AddRes(const int BrId, const int From, const int To) override  {
+
+        // TODO(twwhatever): store from/to/etc. in a way we can retrieve them.
+        // Probably just pass in the output arrays and fill them directly.
+        // But need to also verify and return the output count.
+    }
+
+};
+
 extern "C"
 int ParseWre(
     const char * pInUtf8Str,
@@ -1802,9 +1813,8 @@ int ParseWre(
     FAAllocator alloc;
     FADigitizer_t<char> txt_digitizer;
     FADigitizer_dct_t<char> dct_digitizer;
-    FAAutInterpretTools_fnfa_t<int> proc_fnfa(&alloc);
     FAAutInterpretTools2_trbr_t<int> proc_trbr(&alloc);
-    FABrResult trbr_res(&alloc);
+    BracketOutput trbr_res;
     
     const int Type = pWre->GetType();
     const int TokenType = pWre->GetTokenType();
@@ -1840,20 +1850,10 @@ int ParseWre(
     {
     case FAFsmConst::WRE_TYPE_RS:
     {
-        const FARSDfaCA *pDfa1 = pWre->GetDfa1();
-        proc_fnfa.SetTupleSize(TupleSize);
-        proc_fnfa.SetAnyIw(FAFsmConst::IW_ANY);
-        proc_fnfa.SetRsDfa(pDfa1);
     }
     break;
     case FAFsmConst::WRE_TYPE_MOORE:
     {
-        const FARSDfaCA * pDfa1 = pWre->GetDfa1();
-        const FAState2OwsCA * pState2Ows = pWre->GetState2Ows();
-        proc_fnfa.SetTupleSize(TupleSize);
-        proc_fnfa.SetAnyIw(FAFsmConst::IW_ANY);
-        proc_fnfa.SetRsDfa(pDfa1);
-        proc_fnfa.SetState2Ows(pState2Ows);
     }
     break;
     case FAFsmConst::WRE_TYPE_MEALY:
@@ -1868,7 +1868,6 @@ int ParseWre(
         proc_trbr.SetMealy1(pDfa1, pSigma1);
         proc_trbr.SetMealy2(pDfa2, pSigma2);
         proc_trbr.SetTrBrMap(pTrBr);
-        trbr_res.SetBase(-1);
     }
     break;
     default:
@@ -1915,21 +1914,9 @@ int ParseWre(
 
     switch(Type) {
         case FAFsmConst::WRE_TYPE_RS:
-        
-            proc_fnfa.Chain2Bool(OwsChain, ChainSize);
-
         break;
         case FAFsmConst::WRE_TYPE_MOORE:
         {
-            proc_fnfa.Chain2OwSetChain(OwsChain, ResPtrs, ResSizes, ChainSize);
-
-            bool faound = false;
-
-            for (int i = 0; i < InTokenCount + 2; ++i) {
-                if (0 < ResSizes[i]) {
-
-                }
-            }
         }
         break;
         case FAFsmConst::WRE_TYPE_MEALY:
@@ -1941,21 +1928,6 @@ int ParseWre(
             }
             const int * pFromTo;
             int BrId = -1;
-            int Count = trbr_res.GetNextRes(&BrId, &pFromTo);
-
-            while (-1 != Count) {
-                for (int i = 0; i < Count; ++i) {
-                    if (OutputCount >= MaxOutWordCount) {
-                        ++OutputCount;
-                        continue;
-                    }
-                    pOutFroms[OutputCount] = pFromTo[i++];
-                    pOutTos[OutputCount] = pFromTo[i];
-                    pOutTags[OutputCount] = BrId;
-                    ++OutputCount;
-                }
-                Count = trbr_res.GetNextRes(&Brid, &pFromTo);
-            }
         }
         break;
         default:
