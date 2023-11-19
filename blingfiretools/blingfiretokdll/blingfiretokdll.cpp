@@ -20,6 +20,10 @@
 #include "FAAllocator.h"
 #include "FAFsmConst.h"
 #include "FABrResultA.h"
+#include "FATaggedTextA.h"
+#include "FAMorphLDB_t_packaged.h"
+#include "FAParserConfKeeper.h"
+#include "FAWreLexTools_t.h"
 
 #include "blingfiretokdll.h"
 
@@ -1772,7 +1776,384 @@ class BracketOutput : public FABrResultA {
         // Probably just pass in the output arrays and fill them directly.
         // But need to also verify and return the output count.
     }
+};
 
+// Builds tagged text from input utf8, begin, end, tag arrays
+class TaggedText : public FATaggedTextCA {
+    private:
+    std::vector<std::vector<int>> words_;
+    std::vector<int> tags_;
+    std::vector<int> offsets_;
+
+   public:
+    TaggedText(    const char * pInUtf8Str,
+    int InUtf8StrByteCount,
+    const int * pInStartOffsets,
+    const int * pInEndOffsets,
+    const int * pInTags, 
+    int InTokenCount) {
+        int Word[FALimits::MaxWordLen];
+
+        for (auto i = 0; i < InTokenCount; ++i) {
+            // UTF-8 -> UTF-32
+            const int SymbolCount = FAStrUtf8ToArray(pInUtf8Str + pInStartOffsets[i], pInEndOffsets[i] - pInStartOffsets[i], Word, FALimits::MaxWordLen);
+            FAAssert(0 <= SymbolCount && SymbolCount <= FALimits::MaxWordLen, "word length exceeds max");
+            words_.push_back(std::vector<int>(Word, Word + SymbolCount));
+            tags_.push_back(pInTags[i]);
+            offsets_.push_back(pInStartOffsets[i]);
+        }
+    }
+
+    // FATaggedTextCA
+    const int GetWordCount() const override {
+        return static_cast<int>(words_.size());
+    }
+
+    const int GetWord(const int Num, const int ** pWord) const override {
+        *pWord = &words_[Num][0];
+        return static_cast<int>(words_[Num].size());
+    }
+
+    const int GetTag(const int Num) const override {
+        return tags_[Num];
+    }
+
+    const int GetOffset(const int Num) const override {
+        return offsets_[Num];
+    }
+
+};
+
+class TaggedWords : public FATaggedTextA {
+    std::vector<std::vector<int>> words_;
+    std::vector<int> tags_;
+    std::vector<int> offsets_;
+
+    // FATaggedTextCA
+    const int GetWordCount() const override {
+        return static_cast<int>(words_.size());
+    }
+
+    const int GetWord(const int Num, const int ** pWord) const override {
+        *pWord = &words_[Num][0];
+        return static_cast<int>(words_[Num].size());
+    }
+
+    const int GetTag(const int Num) const override {
+        return tags_[Num];
+    }
+
+    const int GetOffset(const int Num) const override {
+        return offsets_[Num];
+    }
+
+    // FATaggedTextA
+    void AddWord(const int * pWord, const int Length, const int Tag) override {
+        words_.emplace_back(pWord, pWord + Length);
+        tags_.push_back(Tag);
+    }
+    
+    void AddWord (
+            const int * pWord, 
+            const int Length, 
+            const int Tag, 
+            const int Offset
+        ) override {
+            words_.emplace_back(pWord, pWord + Length);
+            tags_.push_back(Tag);
+            offsets_.push_back(Offset);
+        }
+
+    void Clear() override {
+        words_.clear();
+        tags_.clear();
+        offsets_.clear();
+    }
+
+};
+
+// TODO(twwhatever): Port from FAParseTree
+class ParseTree : public FAParseTreeA {
+    private:
+
+    struct Node {
+        int next_;   // right neighbour, -1 if no right neighbour
+        int child_;  // left child, -1 if no left child
+        int label_;
+    };
+
+    std::vector<Node> nodes_;
+    std::vector<int> roots_;
+    std::vector<int> root2label_;
+
+    public:
+
+    void Init(const int Count) override {
+        nodes_.resize(Count);
+        roots_.resize(Count);
+        root2label_.resize(Count);
+
+        if (Count == 0) {
+            return;
+        }
+
+        const int Count_1 = Count - 1;
+
+        for (int i = 0; i < Count_1; ++i) {
+            nodes_[i].label_ = i;
+            nodes_[i].next_ = i + 1;
+            nodes_[i].child_ = -1;
+            roots_[i] = i;
+            root2label_[i] = i;
+        }
+        nodes_[Count_1].label_ = Count_1;
+        nodes_[Count_1].next_ = -1;
+        nodes_[Count_1].child_ = -1;
+        roots_[Count_1] = Count_1;
+        root2label_[Count_1] = Count_1;
+    }
+
+
+    void AddNode (const int Label, const int FromPos, const int ToPos) override {
+           // allocate a new node
+    const int NewNode = nodes_.size ();
+    nodes_.resize (NewNode + 1);
+
+    // get from-node and to-node
+    const int ToNode = roots_ [ToPos];
+    const int FromNode = roots_ [FromPos];
+
+    // this is needed only if inclusion of consituents is allowed at single
+    // stage of parsing (higher level constituents should be added first)
+    roots_ [FromPos] = NewNode;
+
+    // get nodes' data
+    Node & NewNodeData = nodes_ [NewNode];
+    Node & FromNodeData = nodes_ [FromNode];
+    Node & ToNodeData = nodes_ [ToNode];
+
+    // copy the content of a FromNode into a NewNode
+    NewNodeData = FromNodeData;
+
+    // setup a new label for an old FromNode
+    FromNodeData.label_ = Label;
+    // setup a new next-node link for an old FromNode
+    FromNodeData.next_ = ToNodeData.next_;
+    // setup a new child-node link for an old FromNode
+    FromNodeData.child_ = NewNode;
+
+    // setup -1 as a Next node for ToNode
+    if (FromPos != ToPos)
+        ToNodeData.next_ = -1;
+    else
+        NewNodeData.next_ = -1; 
+    }
+
+    void Update () override {
+        roots_.resize(0);
+        root2label_.resize(0);
+
+        int NodeIdx = 0;
+
+        while (-1 != NodeIdx) {
+            auto& nodeData = nodes_[NodeIdx];
+            roots_.push_back(NodeIdx);
+            root2label_.push_back(nodeData.label_);
+
+            NodeIdx = nodeData.next_;
+        }
+    }
+
+    const int GetUpperNodes (const int ** ppNodes) const override {
+        *ppNodes = &roots_[0];
+        return static_cast<int>(roots_.size());
+    }
+
+    const int GetUpperLabels (const int ** ppLabels) const override {
+        *ppLabels = &root2label_[0];
+        return static_cast<int>(root2label_.size());
+    }
+
+    const int GetNext (const int Node) const override {
+        return nodes_[Node].next_;
+    }
+
+    const int GetChild (const int Node) const override {
+        return nodes_[Node].child_;
+    }
+
+    const int GetLabel (const int Node) const override {
+        return nodes_[Node].label_;
+    }
+};
+
+class Wre {
+    private:
+        FAParserConfKeeper conf_;
+        FAMorphLDB_t<int>& ldb_;
+        FADictInterpreter_t<int> tagDict_;
+        FAWreLexTools_t<int> wre_;
+        FAMultiMap_pack acts_;
+        FAAllocator pool_;
+
+
+
+    public:
+
+    Wre(FAMorphLDB_t<int>& ldb) : ldb_(ldb) {
+        // Load PRM LDB
+        const FADictConfKeeper* pDictConf = ldb_.GetTagDictConf();
+
+        if (pDictConf) {
+            tagDict_.SetConf(pDictConf, ldb_.GetInTr());
+        }
+
+        // Load and set up the compiled WRE grammar.
+        // TODO(twwhatever): I think we get everything from the ldb.
+        const int* pValues = nullptr;
+        const int Size = ldb_.GetHeader()->Get(FAFsmConst::FUNC_WRE, &pValues);
+        conf_.Initialize(&ldb_, pValues, Size);
+        wre_.Initialize(&pool_, &conf_, &tagDict_);
+
+    }
+
+    void Process(FAParseTreeA * pTree, const FATaggedTextCA * pIn) {
+        const int WordCount = pIn->GetWordCount();
+        pTree->Init(WordCount);
+        wre_.Reset(WordCount);
+
+        for (int i = 0; i < WordCount; ++i) {
+            const int* pWord;
+            const int WordLen = pIn->GetWord(i, &pWord);
+            const int Tag = pIn->GetTag(i);
+            wre_.AddWord(pWord, WordLen, Tag);
+        }
+
+        wre_.SetParseTree(pTree);
+        wre_.Process();
+
+    }
+};
+
+// TODO(twwhatever): I need some way to handle MWEs.  Maybe better to just port FAMergeMwe
+// more or less entirely rather than pick and choose.
+
+class MergeMwe {
+
+    private:
+
+    const FARSDfaCA* pDfa_;
+    bool IgnoreCase_;
+    int MweDelim_;
+
+    int GetTokenCount(const int Pos, const FATaggedTextCA * pIn) const {
+        const int WordCount = pIn->GetWordCount ();
+
+    int State = pDfa_->GetInitial ();
+    DebugLogAssert (-1 != State);
+
+    int BestJ = Pos;
+
+    for (int j = Pos; j < WordCount; ++j) {
+
+        const int * pWord;
+        const int WordLen = pIn->GetWord (j, &pWord);
+
+        for (int k = 0; k < WordLen && -1 != State; ++k) {
+
+            int Symbol = pWord [k];
+
+            if (IgnoreCase_) {
+                Symbol = FAUtf32ToLower (Symbol) ;
+            }
+
+            State = pDfa_->GetDest (State, Symbol);
+        }
+        if (-1 == State) {
+            break;
+        }
+        if (pDfa_->IsFinal (State)) {
+            BestJ = j;
+        }
+
+        State = pDfa_->GetDest (State, MweDelim_);
+
+    } // for (j = i; ...
+
+    const int TokenCount = BestJ + 1 - Pos;
+    DebugLogAssert (1 <= TokenCount);
+
+    return TokenCount;
+    }
+
+    public:
+    MergeMwe(const FARSDfaCA* pDfa, bool ignoreCase, int mweDelim) : pDfa_(pDfa), IgnoreCase_(ignoreCase), MweDelim_(mweDelim) {}
+
+    void Process(FATaggedTextA * pOut, const FATaggedTextCA * pIn) const {
+    DebugLogAssert (pOut && pIn);
+
+    int j;
+
+    // MWE have the same length limit as an ordinary word
+    const int MaxMweLen = FALimits::MaxWordLen + 1;
+    int MweBuff [MaxMweLen];
+
+    pOut->Clear ();
+
+    const int WordCount = pIn->GetWordCount ();
+
+    for (int i = 0; i < WordCount; ++i) {
+
+        const int MweTokenCount = GetTokenCount (i, pIn);
+
+        if (1 < MweTokenCount) {
+
+            int MweLen = 0;
+
+            for (j = 0; j < MweTokenCount; ++j) {
+
+                const int * pWord;
+                const int WordLen = pIn->GetWord (j + i, &pWord);
+
+                if (MweLen + WordLen + 1 <= MaxMweLen) {
+                    // copy token text
+                    memcpy (MweBuff + MweLen, pWord, sizeof (int) * WordLen);
+                    // copy a delimiter
+                    MweBuff [MweLen + WordLen] = MweDelim_;
+                    // increase MWE length
+                    MweLen += WordLen + 1;
+                } else {
+                    // MWE is too long ...
+                    break;
+                }
+            } // of for (j = 0; ...
+
+            if (j == MweTokenCount) {
+
+                DebugLogAssert (0 < MweLen);
+
+                const int Offset = pIn->GetOffset (i);
+                const int Tag = pIn->GetTag (i + MweTokenCount - 1);
+
+                // MweLen - 1, ignores trailing delimiter
+                pOut->AddWord (MweBuff, MweLen - 1, Tag, Offset);
+
+                // skip middle tokens
+                i += (MweTokenCount - 1);
+                continue;
+            }
+        } // if (1 < MweTokenCount) ...
+
+        // copy a single word
+        const int * pWord;
+        const int WordLen = pIn->GetWord (i, &pWord);
+        const int Tag =  pIn->GetTag (i);
+        const int Offset = pIn->GetOffset (i);
+
+        pOut->AddWord (pWord, WordLen, Tag, Offset);
+
+    } // of for (int i = 0; ...
+    }
 };
 
 extern "C"
@@ -1787,159 +2168,54 @@ int ParseWre(
     int * pOutTos,
     int * pOutTags,
     int MaxOutWordCount,
-    void * hModel
+    void * hMweModel,
+    void * hPrmModel,
+    void * hWreModel
 )
 {
-    if (NULL == hModel) {
+    // TODO(twwhatever): test_wre.cpp is not the way.  The way we got working is actually
+    // fa_ts2ts_mwe | fa_ts2ps --alg=wre.  I think we can combine them here though.
+    // We need to implement FAMergeMwe (or move it from compile).  Then we need to implement
+    // FATaggedTextA in such a way that AddWord feeds into AddWord for WRE.
+
+    if (NULL == hPrmModel || NULL == hMweModel || NULL == hWreModel) {
         return -1;
     }
     // TODO(twwhatever): I don't think it's possible to implicitly load the model here,
     // since it seems like that's hard-coded for word breaking models.
 
-    FAModelData* pFAModel = reinterpret_cast<FAModelData*>(hModel);
-    if (NULL == pFAModel) {
+    FAModelData* pFAPrmModel = reinterpret_cast<FAModelData*>(hPrmModel);
+    FAModelData* pFAMweModel = reinterpret_cast<FAModelData*>(hMweModel);
+    FAModelData* pFAWreModel = reinterpret_cast<FAModelData*>(hWreModel);
+    if (NULL == pFAPrmModel || NULL == pFAMweModel || NULL == pFAWreModel) {
         return -1;
     }
 
+    // Configure Multi-word expression model
+    FAMorphLDB_t<int> ldb;
+    ldb.SetImage(pFAMweModel->m_Img.GetImageDump());
+    const FADictConfKeeper * pConf = ldb.GetTagDictConf();
+    const bool IgnoreCase = pConf->GetIgnoreCase();
+    const FARSDfaCA * pDfa = pConf->GetRsDfa();
+    MergeMwe mweMerger(pDfa, IgnoreCase, int(' '));
+
     // Configure WRE parser
-    FAWREConf_pack packed_wre;
-    packed_wre.SetImage(pFAModel->m_Img.GetImageDump());
-    FAWREConfCA * pWre = &packed_wre;
+    FAMorphLDB_t<int> wreLdb;
+    wreLdb.SetImage(pFAWreModel->m_Img.GetImageDump());
+    Wre wre(wreLdb);
 
-    // TODO(twwhatever): load PRM LDB?  Maybe needed for dictionary support.
-    // TODO(twwhatever): load tagset? Maybe only needed for debugging.
+    // Convert input
+    TaggedText text(pInUtf8Str, InUtf8StrByteCount, pInStartOffsets, pInEndOffsets, pInTags, InTokenCount);
 
-    // run-time initialization
-    FAAllocator alloc;
-    FADigitizer_t<char> txt_digitizer;
-    FADigitizer_dct_t<char> dct_digitizer;
-    FAAutInterpretTools2_trbr_t<int> proc_trbr(&alloc);
-    BracketOutput trbr_res;
+    // Match multiword expressions
+    TaggedWords mweResult;
+    mweMerger.Process(&mweResult, &text);
+
+    // Match WRE
+    ParseTree wreTree;
+    wre.Process(&wreTree, &mweResult);
     
-    const int Type = pWre->GetType();
-    const int TokenType = pWre->GetTokenType();
-    const int TagOwBase = pWre->GetTagOwBase();
-    int TupleSize = 0;
+    // TODO(twwhatever): need to figure out how to output the tree.
 
-    // Initialize digitizers
-    if (FAFsmConst::WRE_TT_TEXT & TokenType) {
-        const FARSDfaCA * pDfa = pWre->GetTxtDigDfa();
-        const FAState2OwCA * pOws = pWre->GetTxtDigOws();
-
-        if (!pDfa || !pOws) {
-            return -2;
-        }
-        txt_digitizer.SetAnyIw(FAFsmConst::IW_ANY);
-        txt_digitizer.SetAnyOw(FAFsmConst::IW_ANY);
-        txt_digitizer.SetIgnoreCase(false);  // TODO(twwhatever)
-        txt_digitizer.SetRsDfa(pDfa);
-        txt_digitizer.SetState2Ow(pOws);
-        txt_digitizer.Prepare();
-        TupleSize++;
-    }
-    if (FAFsmConst::WRE_TT_DCTS & TokenType) {
-        // TODO(twwhatever): This means we need PRM ldb support!
-        return -3;
-    }
-    if (FAFsmConst::WRE_TT_TAGS & TokenType) {
-        TupleSize++;
-    }
-
-    // Initialize interpreters
-    switch (Type)
-    {
-    case FAFsmConst::WRE_TYPE_RS:
-    {
-    }
-    break;
-    case FAFsmConst::WRE_TYPE_MOORE:
-    {
-    }
-    break;
-    case FAFsmConst::WRE_TYPE_MEALY:
-    {
-        const FARSDfaCA *pDfa1 = pWre->GetDfa1();
-        const FAMealyDfaCA *pSigma1 = pWre->GetSigma1();
-        const FARSDfaCA *pDfa2 = pWre->GetDfa2();
-        const FAMealyDfaCA *pSigma2 = pWre->GetSigma2();
-        const FAMultiMapCA *pTrBr = pWre->GetTrBrMap();
-        proc_trbr.SetTupleSize(TupleSize);
-        proc_trbr.SetTokenType(TokenType);
-        proc_trbr.SetMealy1(pDfa1, pSigma1);
-        proc_trbr.SetMealy2(pDfa2, pSigma2);
-        proc_trbr.SetTrBrMap(pTrBr);
-    }
-    break;
-    default:
-        return -4;
-    }
-
-    const int MaxChainSize = FALimits::MaxWordCount * FAFsmConst::DIGITIZER_COUNT;
-    int OwsChain[MaxChainSize];
-    int ResSizes[MaxChainSize];
-    const int * ResPtrs[MaxChainSize];
-
-    for (int k = 0; k < TupleSize; ++k) {
-        OwsChain[k] = FAFsmConst::IW_L_ANCHOR;
-    }
-
-    int ChainSize = TupleSize;
-
-    // Process input
-    for (int i = 0; i < InTokenCount; ++i) {
-        // TODO(twwhatever): will this work without UTF-32 conversion?
-        const char* pWord = &pInUtf8Str[pInStartOffsets[i]];
-        const int WordLen = pInEndOffsets[i] - pInStartOffsets[i] + 1;  // TODO(twwhatever): from, to or start, end?
-        const int Tag = pInTags[i];
-
-        if (FAFsmConst::WRE_TT_TEXT & TokenType) {
-            const int Ow = txt_digitizer.Process(pWord, WordLen);
-            OwsChain[ChainSize++] = Ow;
-        }
-        if (FAFsmConst::WRE_TT_TAGS & TokenType) {
-            const int Ow = Tag * TagOwBase;
-            OwsChain[ChainSize++] = Ow;
-        }
-        if (FAFsmConst::WRE_TT_DCTS & TokenType) {
-            const int Ow = dct_digitizer.Process(pWord, WordLen);
-            OwsChain[ChainSize++] = Ow;
-        }
-    }
-    for (int j = 0; j < TupleSize; ++j) {
-        OwsChain[ChainSize++] = FAFsmConst::IW_R_ANCHOR;
-    }
-
-    // interpretation: Ows --> Results
-    int OutputCount = 0;
-
-    switch(Type) {
-        case FAFsmConst::WRE_TYPE_RS:
-        break;
-        case FAFsmConst::WRE_TYPE_MOORE:
-        {
-        }
-        break;
-        case FAFsmConst::WRE_TYPE_MEALY:
-        {
-            const bool Res = proc_trbr.Process(OwsChain, ChainSize, &trbr_res);
-
-            if (!Res) {
-                break;
-            }
-            const int * pFromTo;
-            int BrId = -1;
-        }
-        break;
-        default:
-        return -4;
-    }
-
-    // TODO(twwhatever): double check this protocol!
-    //
-    //   1. Should we return OutputCount no matter what & let caller deal w/ check?
-    //   2. OutputCount > MaxOutWordCount or OutputCount >= MaxOutWordCount?
-    if (OutputCount >= MaxOutWordCount) {
-        return OutputCount;
-    }
     return 0;
 }
