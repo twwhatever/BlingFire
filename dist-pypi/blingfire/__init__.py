@@ -309,3 +309,46 @@ def utf8text_to_ids_with_offsets(h, s_bytes, max_len, unk = 0, no_padding = Fals
 
 def change_settings_dummy_prefix(h, add_prefix):
     blingfire.SetNoDummyPrefix(c_void_p(h), c_int(not add_prefix))
+
+def parse_text_with_offsets_and_tags(mweModel, wreModel, text, startOffsets, endOffsets, tags, maxOutputCount=None):
+    if len(startOffsets) != len(endOffsets) or len(startOffsets) != len(tags):
+        raise Exception("Invalid input")
+
+    if maxOutputCount is None:
+        # Default max output count to number of input words.
+        maxOutputCount = len(tags)
+
+    o_tags = (c_int32 * maxOutputCount)()
+    o_froms = (c_int32 * maxOutputCount)()
+    o_tos = (c_int32 * maxOutputCount)()
+
+    text_bytes = text.encode("utf-8")
+
+    outputCount = blingfire.ParseWre(
+        c_char_p(text_bytes),
+        c_int(len(text_bytes)),
+        c_void_p(startOffsets.__array_interface__['data'][0]),
+        c_void_p(endOffsets.__array_interface__['data'][0]),
+        c_void_p(tags.__array_interface__['data'][0]),
+        c_int(len(tags)),
+        byref(o_froms),
+        byref(o_tos),
+        byref(o_tags),
+        c_int(maxOutputCount),
+        c_void_p(mweModel),
+        c_void_p(wreModel)
+    )
+
+    def intbuffer(buf):
+        return np.frombuffer(
+            buf, dtype=c_int32, count=min(outputCount, maxOutputCount)
+        )
+
+    return (
+        intbuffer(o_froms),
+        intbuffer(o_tos),
+        intbuffer(o_tags),
+        outputCount
+    )
+        
+  
