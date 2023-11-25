@@ -113,7 +113,7 @@ int ParseWre(
     int * pOutTos,
     int * pOutTags,
     int MaxOutWordCount,
-    void * hPrmModel,
+    void * hMweModel,
     void * hWreModel
 );
 }

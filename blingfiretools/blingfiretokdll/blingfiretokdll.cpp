@@ -2156,6 +2156,59 @@ class MergeMwe {
     }
 };
 
+static std::pair<int, int> treeToTaggedIntervals_rec(const FAParseTreeA& tree, const int Root, std::vector<int>& tags, std::vector<int>& froms, std::vector<int>& tos) {
+    int Node = Root;
+    int From = -1;
+    int To = -1;
+    int Tag = -1;
+
+    while (-1 != Node) {
+        const int Label = tree.GetLabel(Node);
+
+        if (0 <= Label) {
+            // Add token to current span
+            if (From == -1) {
+                From = Label;
+            }
+            To = Label;
+        } else {
+            // Tagged tree node.
+            Tag = -Label;
+        }
+
+        const int Child = tree.GetChild(Node);
+
+        if (-1 != Child) {
+            auto childInterval = treeToTaggedIntervals_rec(tree, Child, tags, froms, tos);
+            auto subFrom = childInterval.first;
+            auto subTo = childInterval.second;
+            if (subFrom != -1) {
+                From = std::min(From, subFrom);
+            }
+            if (subTo != -1) {
+                To = std::min(To, subTo);
+            }
+        }
+
+        // We have completed a tree at the current level.
+        if (Tag != -1) {
+            tags.push_back(Tag);
+            froms.push_back(From);
+            tos.push_back(To);
+        }
+        Node = tree.GetNext(Node);
+    }
+    return std::make_pair(From, To);
+}
+
+static void treeToTaggedIntervals(const FAParseTreeA& tree, std::vector<int>& tags, std::vector<int>& froms, std::vector<int>& tos) {
+    const int* pNodes;
+    const int Count = tree.GetUpperNodes(&pNodes);
+    if (0 < Count) {
+        treeToTaggedIntervals_rec(tree, *pNodes, tags, froms, tos);
+    }
+}
+
 extern "C"
 int ParseWre(
     const char * pInUtf8Str,
@@ -2169,7 +2222,6 @@ int ParseWre(
     int * pOutTags,
     int MaxOutWordCount,
     void * hMweModel,
-    void * hPrmModel,
     void * hWreModel
 )
 {
@@ -2178,16 +2230,15 @@ int ParseWre(
     // We need to implement FAMergeMwe (or move it from compile).  Then we need to implement
     // FATaggedTextA in such a way that AddWord feeds into AddWord for WRE.
 
-    if (NULL == hPrmModel || NULL == hMweModel || NULL == hWreModel) {
+    if (NULL == hMweModel || NULL == hWreModel) {
         return -1;
     }
     // TODO(twwhatever): I don't think it's possible to implicitly load the model here,
     // since it seems like that's hard-coded for word breaking models.
 
-    FAModelData* pFAPrmModel = reinterpret_cast<FAModelData*>(hPrmModel);
     FAModelData* pFAMweModel = reinterpret_cast<FAModelData*>(hMweModel);
     FAModelData* pFAWreModel = reinterpret_cast<FAModelData*>(hWreModel);
-    if (NULL == pFAPrmModel || NULL == pFAMweModel || NULL == pFAWreModel) {
+    if (NULL == pFAMweModel || NULL == pFAWreModel) {
         return -1;
     }
 
@@ -2215,7 +2266,27 @@ int ParseWre(
     ParseTree wreTree;
     wre.Process(&wreTree, &mweResult);
     
-    // TODO(twwhatever): need to figure out how to output the tree.
+    // TODO(twwhatever): need to figure out how to output the tree
+    // From FACorpusIOTools_utf8:
+    //
+    //   If 0 <= Label: Label is used as index of word
+    //   If Label < 0: -Label is used as tag
+    //
+    // If a node has a child, it is used to make a recursive call
+    // Otherwise, the next node is processed.
+    //
+    // So we use the tree structure to infer from/to based on non-negative labels
+    // and the recursive structure.
+    std::vector<int> Tags;
+    std::vector<int> Froms;
+    std::vector<int> Tos;
+    treeToTaggedIntervals(wreTree, Tags, Froms, Tos);
 
-    return 0;
+    for (int i = 0; i < MaxOutWordCount && i < Tags.size(); ++i) {
+        pOutTags[i] = Tags[i];
+        pOutFroms[i] = Froms[i];
+        pOutTos[i] = Tos[i];
+    }
+
+    return Tags.size();
 }
