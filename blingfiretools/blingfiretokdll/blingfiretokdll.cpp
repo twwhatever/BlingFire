@@ -1799,7 +1799,6 @@ class TaggedText : public FATaggedTextCA {
             // UTF-8 -> UTF-32
             const int SymbolCount = FAStrUtf8ToArray(pInUtf8Str + pInStartOffsets[i], pInEndOffsets[i] - pInStartOffsets[i], Word, FALimits::MaxWordLen);
             FAAssert(0 <= SymbolCount && SymbolCount <= FALimits::MaxWordLen, "word length exceeds max");
-            std::cout << "TaggedText word at pos " << i << " has " << " start " << pInStartOffsets[i] << " and end " << pInEndOffsets[i] << " and symbol count " << SymbolCount << " and tag " << pInTags[i] << std::endl;
             words_.push_back(std::vector<int>(Word, Word + SymbolCount));
             tags_.push_back(pInTags[i]);
             offsets_.push_back(pInStartOffsets[i]);
@@ -2061,7 +2060,6 @@ class MergeMwe {
 
         const int * pWord;
         const int WordLen = pIn->GetWord (j, &pWord);
-        std::cout << "MWE: token at position " << j << " has length " << WordLen << std::endl;
 
         for (int k = 0; k < WordLen && -1 != State; ++k) {
 
@@ -2109,7 +2107,6 @@ class MergeMwe {
     for (int i = 0; i < WordCount; ++i) {
 
         const int MweTokenCount = GetTokenCount (i, pIn);
-        std::cout << "MWE token count at pos " << i << " is " << MweTokenCount << std::endl;
 
         if (1 < MweTokenCount) {
 
@@ -2169,7 +2166,6 @@ static std::pair<int, int> treeToTaggedIntervals_rec(const FAParseTreeA& tree, c
 
     while (-1 != Node) {
         const int Label = tree.GetLabel(Node);
-        std::cout << "Processing node " << Node << " label " << Label << " next " << tree.GetNext(Node) << " child " << tree.GetChild(Node) << std::endl;
         if (0 <= Label) {
             // Add token to current span
             if (From == -1) {
@@ -2184,11 +2180,9 @@ static std::pair<int, int> treeToTaggedIntervals_rec(const FAParseTreeA& tree, c
         const int Child = tree.GetChild(Node);
 
         if (-1 != Child) {
-            std::cout << "Recursing on node " << Child << ": ";
             auto childInterval = treeToTaggedIntervals_rec(tree, Child, tags, froms, tos);
             auto subFrom = childInterval.first;
             auto subTo = childInterval.second;
-            std::cout << "Subtree spans " << subFrom << ", " << subTo << std::endl;
             if (subFrom != -1) {
                 From = subFrom;
             }
@@ -2198,7 +2192,6 @@ static std::pair<int, int> treeToTaggedIntervals_rec(const FAParseTreeA& tree, c
         }
         // We have completed a tree at the current level.
         if (Tag != -1) {
-            std::cout << "Adding node: " << Tag << " " << From << " " << To << std::endl;
             tags.push_back(Tag);
             froms.push_back(From);
             tos.push_back(To);
@@ -2213,10 +2206,6 @@ static void treeToTaggedIntervals(const FAParseTreeA& tree, std::vector<int>& ta
     const int* pNodes;
     const int Count = tree.GetUpperNodes(&pNodes);
     if (0 < Count) {
-        std::cout << "Tree has " << Count << " upper nodes" << std::endl;
-        for (int i = 0; i < Count; ++i) {
-            std::cout << "Upper level node " << pNodes[i] << " label " << tree.GetLabel(pNodes[i]) << " next " << tree.GetNext(pNodes[i]) << " child " << tree.GetChild(pNodes[i]) << std::endl;
-        }
         treeToTaggedIntervals_rec(tree, *pNodes, tags, froms, tos);
     }
 }
@@ -2273,7 +2262,6 @@ int ParseWre(
     // Match multiword expressions
     TaggedWords mweResult;
     mweMerger.Process(&mweResult, &text);
-    std::cout << "got " << mweResult.GetWordCount() << " word(s) after MWE" << std::endl;
 
     // Match WRE
     ParseTree wreTree;
@@ -2297,10 +2285,6 @@ int ParseWre(
             toMap[i - 1] = textIndex - 1; 
         }
         fromMap.push_back(textIndex);
-    }
-
-    for (int i = 0; i < fromMap.size(); ++i) {
-        std::cout << "Mapping MWE index " << i << " to " << fromMap[i] << ". " << toMap[i] << std::endl;
     }
 
     for (int i = 0; i < MaxOutWordCount && i < Tags.size(); ++i) {
