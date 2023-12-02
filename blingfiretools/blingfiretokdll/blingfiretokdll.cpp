@@ -2165,7 +2165,6 @@ static std::pair<int, int> treeToTaggedIntervals_rec(const FAParseTreeA& tree, c
     int Tag = -1;
 
     while (-1 != Node) {
-        std::cout << "Root node index " << Node << " label " << tree.GetLabel(Node) << " child " << tree.GetChild(Node) << " next " << tree.GetNext(Node) << std::endl;
         const int Label = tree.GetLabel(Node);
         if (0 <= Label) {
             // Add token to current span
